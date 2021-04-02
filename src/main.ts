@@ -53,7 +53,7 @@ const linePromiseReply = (event: ReplyableEvent, text: string): Promise<MessageA
 
 const formatServerResponse = (srvResp: StatusResponse): string =>
     `
-    Server address: ${srvResp.host}:${srvResp.port}\n
+    Server address: ${srvResp.host}\n
     Server version: ${srvResp.version}\n
     Online players: ${srvResp.onlinePlayers}/${srvResp.maxPlayers}
     Players: ${
