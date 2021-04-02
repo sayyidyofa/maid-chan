@@ -6,6 +6,10 @@
   "repository": "https://github.com/sayyidyofa/maid-chan",
   "author": "Sayyid Y.",
   "license": "MIT",
+  "engines": {
+    "node": "14.16.0",
+    "yarn": "1.22.5"
+  },
   "scripts": {
     "check-types": "tsc",
     "start": "node dist/main.js",
