@@ -51,9 +51,10 @@ const linePromiseReply = (event: ReplyableEvent, text: string): Promise<MessageA
     });
 }
 
-const formatServerResponse = (srvResp: StatusResponse): string =>
+const formatServerResponse = (srvResp: StatusResponse, ngrokPort?: string): string =>
     `
     Server address: ${srvResp.host}\n
+    Server port: ${ngrokPort === undefined ? '25565': ngrokPort}
     Server version: ${srvResp.version}\n
     Online players: ${srvResp.onlinePlayers}/${srvResp.maxPlayers}
     Players: ${
@@ -67,29 +68,27 @@ const formatServerResponse = (srvResp: StatusResponse): string =>
 const helpMessage = "" +
     "Command list:\n" +
     "/help Display this message\n" +
-    "/mcstatus Check the status of my master\'s Minecraft Server\n"
+    "/mcstatus Check the status of my master's Minecraft Server\n"
 
-const handleEvent = ({events}: WebhookRequestBody): Array<Promise<MessageAPIResponseBase> | undefined> => {
-    return events.map(webhookEvent => {
+const handleEvent = ({events}: WebhookRequestBody): Array<Promise<MessageAPIResponseBase> | undefined> =>
+    events.map(webhookEvent => {
         switch (webhookEvent.type) {
             case "message":
-                let msgEvent = <MessageEvent>webhookEvent;
-                switch (msgEvent.message.type) {
+                switch ((<MessageEvent>webhookEvent).message.type) {
                     case "text":
-                        let textMesg = <TextMessage>msgEvent.message
-                        switch (extractCommand(textMesg.text)) {
+                        switch (extractCommand((<TextMessage>(<MessageEvent>webhookEvent).message).text)) {
                             case commandType.HELP:
                                 return linePromiseReply(<ReplyableEvent>webhookEvent, helpMessage)
                             case commandType.MCSTATUS:
-                                redisClient.get("SERVER_HOSTNAME", (err, reply) => {
+                                redisClient.get("serverURL", (err, reply) => {
                                     if (err !== null) {
                                         return linePromiseReply(<ReplyableEvent>webhookEvent, `Server is offline. Code: ${replyErrors.REDIS_FAIL_GET}`)
                                     } else {
                                         switch (typeof reply) {
                                             case "string":
-                                                return status(reply)
-                                                    .then(serverResponse => linePromiseReply(<ReplyableEvent>webhookEvent, formatServerResponse(serverResponse)))
-                                                    .catch(reason => linePromiseReply(<ReplyableEvent>webhookEvent, `Server is offline. Code: ${replyErrors.MC_QUERY_FAIL}`))
+                                                return status(new URL(reply).hostname, {port: parseInt(new URL(reply).port)})
+                                                    .then(serverResponse => linePromiseReply(<ReplyableEvent>webhookEvent, formatServerResponse(serverResponse, new URL(reply).port)))
+                                                    .catch(() => linePromiseReply(<ReplyableEvent>webhookEvent, `Server is offline. Code: ${replyErrors.MC_QUERY_FAIL}`))
                                             default:
                                                 return linePromiseReply(<ReplyableEvent>webhookEvent, `Server is offline. Code: ${replyErrors.REDIS_NOT_STRING}`)
                                         }
@@ -105,7 +104,6 @@ const handleEvent = ({events}: WebhookRequestBody): Array<Promise<MessageAPIResp
                 return undefined;
         }
     })
-}
 
 server.post("/webhook", middleware(<MiddlewareConfig>lineConfig), (req, res) => {
     Promise
@@ -138,7 +136,13 @@ const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
 
 const serverHostnameValidation = [
     [
-        check("serverHostname", "Please provide server hostname").not().isEmpty()
+        check("serverURL", "Please provide a valid Minecraft server URL").not().isEmpty().isURL({
+            protocols: ["tcp"],
+            require_protocol: true,
+            validate_length: true,
+            require_host: true,
+            require_port: true
+        })
     ],
     (req: Request, res: Response, next: NextFunction) => {
         const errors = validationResult(req);
@@ -151,8 +155,8 @@ const serverHostnameValidation = [
     }
 ];
 
-server.post("/setServerHostname", authMiddleware, ...serverHostnameValidation, (req: Request, res: Response) => {
-    redisClient.set("SERVER_HOSTNAME", req.body.serverHostname, (err, reply) => {
+server.post("/serverURL", authMiddleware, ...serverHostnameValidation, (req: Request, res: Response) => {
+    redisClient.set("serverURL", req.body.serverHostname, (err, reply) => {
         if (err !== null) {
             console.warn(err)
             res.header(500)
