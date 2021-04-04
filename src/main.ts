@@ -134,7 +134,7 @@ const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
     }
 }
 
-const serverHostnameValidation = [
+const serverURLValidation = [
     [
         check("serverURL", "Please provide a valid Minecraft server URL").not().isEmpty().isURL({
             protocols: ["tcp"],
@@ -155,8 +155,8 @@ const serverHostnameValidation = [
     }
 ];
 
-server.post("/serverURL", authMiddleware, ...serverHostnameValidation, (req: Request, res: Response) => {
-    redisClient.set("serverURL", req.body.serverHostname, (err, reply) => {
+server.post("/serverURL", authMiddleware, ...serverURLValidation, (req: Request, res: Response) => {
+    redisClient.set("serverURL", req.body.serverURL, (err, reply) => {
         if (err !== null) {
             console.warn(err)
             res.header(500)
